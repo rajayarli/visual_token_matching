@@ -370,6 +370,7 @@ class TaskonomyHybridDataset(TaskonomyBaseDataset):
 
             # load image, label, and mask
             img, success = self.load_img(img_path)
+    
             label, mask = self.load_task(task, img_path)
             if not success:
                 mask = np.zeros_like(label)
@@ -547,8 +548,8 @@ class TaskonomySegmentationDataset(TaskonomyBaseDataset):
         class_idxs = (torch.tensor(class_idxs)[idxs_perm[self.semseg_class]]).numpy()
         
         # filter images in given buildings
-        self.class_idxs = [class_idx for class_idx in class_idxs if self.img_paths[class_idx].split('_')[0] in buildings]
         
+        self.class_idxs = [class_idx for class_idx in class_idxs if class_idx<len(self.img_paths) and self.img_paths[class_idx].split(' ')[0] in buildings]
         self.dset_size = dset_size
     
     def __len__(self):

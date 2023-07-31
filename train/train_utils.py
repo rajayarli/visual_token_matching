@@ -56,15 +56,17 @@ def set_seeds(seed):
     random.seed(seed)
     np.random.seed(seed)
 
-
 def set_directories(config, root_dir='experiments', exp_name='', log_dir='logs', save_dir='checkpoints',
                     create_log_dir=True, create_save_dir=True, dir_postfix='', exp_subname=''):
     # make an experiment name
     if exp_name == '':
         if config.task == '':
-            exp_name = config.exp_name = f'{config.model}_fold:{config.task_fold}{config.name_postfix}'
+            exp_name = config.exp_name = f'{config.model}_fold_{config.task_fold}{config.name_postfix}'
         else:
-            exp_name = config.exp_name = f'{config.model}_task:{config.task}{config.name_postfix}'
+            exp_name = config.exp_name = f'{config.model}_task_{config.task}{config.name_postfix}'
+    
+    # Replace any colon with an underscore in the experiment name
+    exp_name = exp_name.replace(':', '_')
     
     # create the root directory
     os.makedirs(root_dir, exist_ok=True)
@@ -122,13 +124,8 @@ def set_directories(config, root_dir='experiments', exp_name='', log_dir='logs',
 
     return log_dir, save_dir
 
-
 def set_strategy(strategy):
-    if strategy == 'ddp':
-        strategy = pl.strategies.DDPStrategy()
-    else:
-        strategy = None
-        
+    
     return strategy
 
 

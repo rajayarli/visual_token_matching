@@ -72,5 +72,9 @@ if __name__ == "__main__":
             config.channel_idx = channel_idx
             run(config)
     else:
+        from dataset.dataloader_factory import generate_support_data
+
+# Call the generate_support_data function directly
+        support_data = generate_support_data(config, data_path="path_to_save_support_data.pt", split="train", verbose=True)
         run(config)
 

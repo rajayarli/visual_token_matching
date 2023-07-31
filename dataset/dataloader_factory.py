@@ -167,17 +167,12 @@ def get_validation_loaders(config, verbose=True):
     valid_loaders = {}
     for task in train_tasks:
         if task == 'segment_semantic':
-            if config.channel_idx < 0:
-                channels = SEMSEG_CLASSES
-            else:
-                channels = [config.channel_idx]
-            for c in channels:
-                valid_loaders[f'segment_semantic_{c}'] = get_eval_loader(config, task, 'valid', c, verbose=verbose)
+            # Load RGB images (channel index 0 for RGB)
+            valid_loaders[task] = get_eval_loader(config, task, 'valid', channel_idx=0, verbose=verbose)
         else:
             valid_loaders[task] = get_eval_loader(config, task, 'valid', verbose=verbose)
     
     return valid_loaders, loader_tag
-
 
 def generate_support_data(config, data_path, split='train', support_idx=0, verbose=True):
     '''
@@ -210,65 +205,55 @@ def generate_support_data(config, data_path, split='train', support_idx=0, verbo
     }
     
     for task in TASKS_GROUP_NAMES:
+        # Use the TaskonomyContinuousDataset for RGB data
         if task == 'segment_semantic':
-            for c in SEMSEG_CLASSES:
-                if f'segment_semantic_{c}' in support_data:
-                    continue
+            continue  # Skip segmentation task for RGB data
+            
+        if task in support_data:
+            continue
 
-                dset = TaskonomySegmentationDataset(
-                    semseg_class=c,
-                    **common_kwargs
-                )
-                dloader = DataLoader(dset, batch_size=config.shot, shuffle=False, num_workers=0)
-                for idx, batch in enumerate(dloader):
-                    if idx == support_idx:
-                        break
+        dset = TaskonomyContinuousDataset(
+            task=task,
+            **common_kwargs
+        )
         
-                X, Y, M = batch
-                
-                T = Y.size(1)
-                X = repeat(X, 'N C H W -> 1 T N C H W', T=T)
-                Y = rearrange(Y, 'N T H W -> 1 T N 1 H W')
-                M = rearrange(M, 'N T H W -> 1 T N 1 H W')
-                X, Y, M = crop_arrays(X, Y, M, base_size=base_size, img_size=(config.img_size, config.img_size),
-                                      random=False)
-                
-                t_idx = torch.tensor([[TASKS.index(f'segment_semantic_{c}')]])
-                
-                support_data[f'segment_semantic_{c}'] = (X, Y, M, t_idx)
-                if verbose:
-                    print(f'generated support data for task segment_semantic_{c}')
-                modified = True
-        else:
-            if task in support_data:
-                continue
+        dloader = DataLoader(dset, batch_size=config.shot, shuffle=False, num_workers=0)
+        num_batches = len(dloader)
+        print(f"Task: {task}, Number of Batches: {num_batches}")
 
-            dset = TaskonomyContinuousDataset(
-                task=task,
-                **common_kwargs
-            )
-            
-            dloader = DataLoader(dset, batch_size=config.shot, shuffle=False, num_workers=0)
-            for idx, batch in enumerate(dloader):
-                if idx == support_idx:
-                    break
+        if num_batches == 0:
+            print(f"Skipping task {task} as it does not have any batches in the dataset.")
+            continue
+        
+        if num_batches <= support_idx:
+            raise ValueError(f"support_idx={support_idx} is larger than the number of batches in the dataset for task={task}")
+        
+        batch = None
+        for idx, batch in enumerate(dloader):
+            if idx == support_idx:
+                # Add debug statements to print batch information
+                print(f"Task: {task}, Batch Size: {len(batch)}, X Size: {batch[0].size()}, Y Size: {batch[1].size()}, M Size: {batch[2].size()}")
+                break
 
-            X, Y, M = batch
-            T = Y.size(1)
-            X = repeat(X, 'N C H W -> 1 T N C H W', T=T)
-            Y = rearrange(Y, 'N T H W -> 1 T N 1 H W')
-            M = rearrange(M, 'N T H W -> 1 T N 1 H W')
-            X, Y, M = crop_arrays(X, Y, M, base_size=base_size, img_size=(config.img_size, config.img_size),
-                                    random=False)
-            
-            t_idx = torch.tensor([[TASKS.index(f'{task}_{c}') for c in range(len(TASKS_GROUP_DICT[task]))]])
+        X, Y, M = batch
+        T = Y.size(1)
+        X = repeat(X, 'N C H W -> 1 T N C H W', T=T)
+        Y = rearrange(Y, 'N T H W -> 1 T N 1 H W')
+        M = rearrange(M, 'N T H W -> 1 T N 1 H W')
+        X, Y, M = crop_arrays(X, Y, M, base_size=base_size, img_size=(config.img_size, config.img_size),
+                                random=False)
+        
+        t_idx = torch.tensor([[TASKS.index(f'{task}_{c}') for c in range(len(TASKS_GROUP_DICT[task]))]])
 
-            support_data[task] = (X, Y, M, t_idx)
-            if verbose:
-                print(f'generated support data for task {task}')
-            modified = True
+        support_data[task] = (X, Y, M, t_idx)
+        if verbose:
+            print(f'Generated support data for task {task}')
+        modified = True
 
     if modified:
         torch.save(support_data, data_path)
             
     return support_data
+
+
+
